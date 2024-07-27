@@ -54,13 +54,11 @@ bash prepare/download_model.sh
 
 To generate motions using a pretrained model use the following command: 
 ```shell
-python -m sample.transfer --model_path ./save/official_model/model000500000.pt --text_leader "a person is walking" --text_follower "a person walks with hands high above his head"  "a person stands, then walks like a gorilla" 
---num_repetitions 1 --assign_root_rot 
+python -m sample.transfer --model_path ./save/official_model/model000500000.pt --text_leader "a person is walking" --text_follower "a person walks with hands high above his head"  "a person stands, then walks like a gorilla" --num_repetitions 1 --assign_root_rot 
 ```
 If you want to use real motions via inversion, make sure you have the **full version** of the dataset and use the following arguments:
 ```shell
---leader_motion_path dataset/HumanML3D/new_joint_vecs/006473.npy 
---follower_motion_path dataset/HumanML3D/new_joint_vecs/013122.npy    
+--leader_motion_path dataset/HumanML3D/new_joint_vecs/006473.npy --follower_motion_path dataset/HumanML3D/new_joint_vecs/013122.npy    
 ```
 Argument values are given as examples.
 
@@ -97,6 +95,5 @@ The following MDM functionalities can be used as in the MDM repository.
 ### Motion Synthesis
 Follow [these instructions](https://github.com/GuyTevet/motion-diffusion-model?tab=readme-ov-file#motion-synthesis) under the ``Text to Motion`` detail. For example:
 ```shell
-python -m sample.generate --model_path ./save/official_model/model000500000.pt  --num_repetitions 3 
---text_prompt "a person is dancing wildly" --motion_length 8
+python -m sample.generate --model_path ./save/official_model/model000500000.pt --num_repetitions 3 --text_prompt "a person is dancing wildly" --motion_length 8
 ```
