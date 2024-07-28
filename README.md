@@ -2,6 +2,9 @@
 
 Please visit our [project page](https://monkeyseedocg.github.io/) for more details.
 
+## News
+📢 **July 27, 2024**: First release - motion transfer of generated or inverted motions, using a pretrained model. Coming soon: visualization of deep features, evaluation.
+
 ## Preparations
 ### Create Environment
 
@@ -17,8 +20,6 @@ conda env create -f environment.yml
 conda activate MoMo
 pip install git+https://github.com/openai/CLIP.git
 ```
-
-## Preparations
 
 ### Get Data
 
@@ -90,10 +91,16 @@ Example of file `follower_samples_00_to_##.mp4`:
 
 <img alt="example" src="assets/follower_samples_00_to_00.gif" width="53%"/>
 
-## Other Functionalities
+## Evaluation
+🔜 Coming soon
+## Visualization of Deep Features
+🔜 Coming soon
+## MDM Compatible Functionalities
 The following MDM functionalities can be used as in the MDM repository.
 ### Motion Synthesis
 Follow [these instructions](https://github.com/GuyTevet/motion-diffusion-model?tab=readme-ov-file#motion-synthesis) under the ``Text to Motion`` detail. For example:
 ```shell
 python -m sample.generate --model_path ./save/official_model/model000500000.pt --num_repetitions 3 --text_prompt "a person is dancing wildly" --motion_length 8
 ```
+### Model Training
+🔜 Coming soon
