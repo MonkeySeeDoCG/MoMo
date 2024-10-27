@@ -1,3 +1,6 @@
+import json
+from pathlib import Path
+from typing import List, Tuple, Dict
 from torch.utils import data
 import numpy as np
 import os
@@ -15,6 +18,12 @@ def collate_fn(batch):
     batch.sort(key=lambda x: x[3], reverse=True)
     return default_collate(batch)
 
+
+def index_containing_substring(the_list, substring):
+    for i, s in enumerate(the_list):
+        if substring in s:
+              return i
+    raise ValueError(f'[{substring}] not in list')
 
 '''For use of training text-2-motion generative model'''
 class Text2MotionDataset(data.Dataset):
@@ -287,7 +296,35 @@ class Text2MotionDatasetV2(data.Dataset):
         self.length_arr = np.array(length_list)
         self.data_dict = data_dict
         self.name_list = name_list
+        
+        if self.opt.filter_path != '':
+            self.filter_dataset()
+        
         self.reset_max_len(self.max_length)
+
+    def idx_to_path(self, idx):
+        path = os.path.join(self.opt.motion_dir, idx + '.npy')
+        return path
+    
+    def filter_dataset(self):
+        with open(self.opt.filter_path, 'r') as f:
+            pairs_list = json.load(f)
+        filter_list = []
+        for e in pairs_list:
+            filter_list += e
+
+        new_data_dict = {}
+        new_name_list = []
+        for e in filter_list:
+            for name in self.name_list:
+                if e in name:
+                    if name not in new_name_list:
+                        new_name_list.append(name)
+                        new_data_dict.update({name: self.data_dict[name]})
+        print(f'Found [{len(new_data_dict)}] unique motions in [{self.opt.filter_path}]')
+
+        self.data_dict = new_data_dict
+        self.name_list = new_name_list
 
     def reset_max_len(self, length):
         assert length <= self.max_motion_length
@@ -301,12 +338,15 @@ class Text2MotionDatasetV2(data.Dataset):
     def __len__(self):
         return len(self.data_dict) - self.pointer
 
-    def __getitem__(self, item):
+    def __getitem__(self, item, use_first_text=False):
         idx = self.pointer + item
         data = self.data_dict[self.name_list[idx]]
         motion, m_length, text_list = data['motion'], data['length'], data['text']
-        # Randomly select a caption
-        text_data = random.choice(text_list)
+        if use_first_text:
+            text_data = text_list[0]
+        else:
+            # Randomly select a caption
+            text_data = random.choice(text_list)
         caption, tokens = text_data['caption'], text_data['tokens']
 
         if len(tokens) < self.opt.max_text_len:
@@ -351,6 +391,42 @@ class Text2MotionDatasetV2(data.Dataset):
         # print(word_embeddings.shape, motion.shape)
         # print(tokens)
         return word_embeddings, pos_one_hots, caption, sent_len, motion, m_length, '_'.join(tokens)
+
+
+# For Cross-Motion-Attention Evaluation
+class TransferDataset(Text2MotionDatasetV2):
+    def __init__(self, opt, mean, std, split_file, w_vectorizer):
+        assert os.path.isfile(opt.benchmark_path)
+        super().__init__(opt, mean, std, split_file, w_vectorizer)
+        self.benchmarks = self.parse_json_benchmark(self.opt.benchmark_path, self.name_list)
+        self.name_list = list(self.name_list)
+
+    @staticmethod
+    def parse_json_benchmark(benchmark_path: Path, name_list: List[str]) -> Dict[str, List[str]]:
+        with open(benchmark_path, 'r') as f:
+            data = json.load(f)
+
+        bad_idx = [idx for idx, (str1, str2) in enumerate(data) 
+                   if not (any(str1 in name for name in name_list) and any(str2 in name for name in name_list))]
+
+        benchmarks_dict = {'leader_idx': [ldr for i, (ldr, _) in enumerate(data) if i not in bad_idx],
+                           'follower_idx': [flw for i, (_, flw) in enumerate(data) if i not in bad_idx]}
+
+        return benchmarks_dict
+        
+    def __len__(self):
+        return len(self.benchmarks['leader_idx'])
+    
+    def __getitem__(self, item):
+        # use_first_text=True because the benchmark is based on the first text
+        
+        leader_idx = index_containing_substring(self.name_list, self.benchmarks['leader_idx'][item])
+        leader_tup = super().__getitem__(leader_idx, use_first_text=True) + (self.benchmarks['leader_idx'][item],)
+
+        follower_idx = index_containing_substring(self.name_list, self.benchmarks['follower_idx'][item])
+        follower_tup = super().__getitem__(follower_idx, use_first_text=True) + (self.benchmarks['follower_idx'][item],)
+
+        return list(zip(leader_tup, follower_tup))
 
 
 '''For use of training baseline'''
@@ -750,6 +826,8 @@ class HumanML3D(data.Dataset):
         opt.save_root = pjoin(abs_base_path, opt.save_root)
         opt.meta_dir = './dataset'
         opt.use_cache = kwargs.get('use_cache', True)
+        opt.benchmark_path = kwargs.get('benchmark_path', '')
+        opt.filter_path = kwargs.get('filter_path', '')
         self.opt = opt
         
         self.n_joints = self.opt.joints_num
@@ -776,7 +854,8 @@ class HumanML3D(data.Dataset):
             self.t2m_dataset = TextOnlyDataset(self.opt, self.mean, self.std, self.split_file)
         else:
             self.w_vectorizer = WordVectorizer(opt.glove_dir, 'our_vab')
-            self.t2m_dataset = Text2MotionDatasetV2(self.opt, self.mean, self.std, self.split_file, self.w_vectorizer)
+            DATASET = Text2MotionDatasetV2 if opt.benchmark_path == '' else TransferDataset
+            self.t2m_dataset = DATASET(self.opt, self.mean, self.std, self.split_file, self.w_vectorizer)
             self.num_actions = 1 # dummy placeholder
 
         assert len(self.t2m_dataset) > 1, 'You loaded an empty dataset, ' \

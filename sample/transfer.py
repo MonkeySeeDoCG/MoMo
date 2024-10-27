@@ -12,6 +12,7 @@ from utils.visualize import save_multiple_samples
 import data_utils.humanml.utils.paramUtil as paramUtil
 from utils.model_util import load_into_model_format
 from utils import dist_util
+from collections.abc import Iterable
 
 
 def main():
@@ -25,39 +26,58 @@ def main():
 
 
 def transfer(args, data, model, diffusion):
-    assert args.text_leader or args.leader_motion_path
-    assert args.text_follower or args.follower_motion_path
+    given_motion_kwargs = getattr(args, 'given_motion_kwargs', None)
+    assert args.text_leader or args.leader_motion_path or given_motion_kwargs
+    assert args.text_follower or args.follower_motion_path or given_motion_kwargs
+    is_inv = args.leader_motion_path or args.follower_motion_path or given_motion_kwargs
     
     # enable real motions via inversion
-    if args.leader_motion_path or args.follower_motion_path:
+    if is_inv:
         assert args.n_follower_mult == 1, 'Inversion not implemented for n_follower_mult > 1'  # todo: rotate follower motions n_follower_mult times before inversion
-        # load motions to invert
-        motion_paths = [args.leader_motion_path] if args.leader_motion_path is not None else []
-        motion_paths += args.follower_motion_path
-        motions_to_invert, motions_to_invert_kwargs = load_into_model_format(motion_paths, HumanMlNormalizer, load_motions)
-        inv_motions = diffusion.ddim_reverse_sample_loop(model, motions_to_invert, 
-                                                            clip_denoised=False, 
-                                                            model_kwargs=motions_to_invert_kwargs, 
-                                                            progress=True, )['sample']        
+        if not given_motion_kwargs:
+            # args.leader_motion_path = data.t2m_dataset.idx_to_path(given_motion_kwargs['y']['leader_idx'])            
+            # args.follower_motion_path = [data.t2m_dataset.idx_to_path(given_motion_kwargs['y']['follower_idx'])]            
+            # load motions to invert
+            motion_paths = [args.leader_motion_path] if args.leader_motion_path is not None else []
+            motion_paths += args.follower_motion_path
+            motions_to_invert, motions_to_invert_kwargs = load_into_model_format(motion_paths, HumanMlNormalizer, load_motions)
+        else:
+            motions_to_invert = np.stack([given_motion_kwargs['y']['leader_motion'], given_motion_kwargs['y']['follower_motion']], axis=0)
+            motions_to_invert = torch.from_numpy(motions_to_invert).to(dist_util.dev())
+            motions_to_invert_kwargs = {'y': 
+                {'text': [given_motion_kwargs['y']['leader_text'], given_motion_kwargs['y']['follower_text']], 
+                'tokens': [given_motion_kwargs['y']['leader_tokens'], given_motion_kwargs['y']['follower_tokens']], 
+                'lengths': torch.tensor([given_motion_kwargs['y']['leader_lengths'], given_motion_kwargs['y']['follower_lengths']]),
+                'mask': torch.stack([given_motion_kwargs['y']['leader_mask'], given_motion_kwargs['y']['follower_mask']], axis=0), 
+                'scale': torch.ones(2).to(dist_util.dev())}}
+        show_progress = getattr(args, 'show_progress', True)
+        inv_motions = diffusion.ddim_reverse_sample_loop(model, motions_to_invert, clip_denoised=False, 
+                                                         model_kwargs=motions_to_invert_kwargs, progress=show_progress)['sample']        
         text_leader, text_follower, n_frames, inv_idx = merge_inverse_args(args, data, motions_to_invert_kwargs['y']['text'], motions_to_invert_kwargs['y']['lengths'])
+        max_tensor_frames = max(n_frames + [motions_to_invert[0].shape[-1]])
     else:
         text_leader = args.text_leader
         text_follower = args.text_follower
-        n_frames = None
+        if isinstance(args.motion_length, Iterable):
+            # currently this path is reached only during evaluation
+            n_frames = args.motion_length  + [args.motion_length[0]]  # assign leader length to output - might need adaptatin to n_follower_mult one day
+        else: 
+            n_frames = None
+        max_tensor_frames = None
 
     text_follower_mult = [x for x in text_follower for _ in range(args.n_follower_mult)]
     texts = [text_leader] + text_follower_mult + text_follower  # follower <-- text_follower_mult; out <-- args.text_follower
     args.num_samples = len(texts)
 
     out_path, shape, model_kwargs, max_frames = get_sample_vars(args, data, model, texts, 
-                                                                GetOutName(text_leader,text_follower), n_frames=n_frames)
+                                                                GetOutName(text_leader, text_follower), n_frames=n_frames, max_tensor_frames=max_tensor_frames)
     model_kwargs['features_mode'] = 'transfer'
 
     # handle initial noise
-    if args.leader_motion_path or args.follower_motion_path:
+    if is_inv:
         max_inv_frames = inv_motions.shape[-1]
         init_noise = torch.randn(shape, device=dist_util.dev())   
-        init_noise[inv_idx, :, :, :max_inv_frames] = inv_motions  # max_in_frames might be smaller than shape[-1]
+        init_noise[inv_idx, :, :, :max_inv_frames] = inv_motions  # max_inv_frames might be smaller than shape[-1]
         model_kwargs['y']['scale'][inv_idx] = 1.0
         model_kwargs['y']['scale'][model.transfer_idx['out']] = 1.0
     else:
@@ -69,13 +89,13 @@ def transfer(args, data, model, diffusion):
     all_motions = assign_leader_root_rot(args, data.n_features, model.transfer_idx, all_motions)  
         
     # get xyz abs locations
-    all_motions = get_xyz_rep(data, all_motions)
+    xyz_motions = get_xyz_rep(data, all_motions)
 
     # save outputs in an xyz format
-    save_results(args, out_path, all_motions, all_lengths, all_text)
+    save_results(args, out_path, xyz_motions, all_lengths, all_text)
 
-    visualize_motions(out_path, args, all_motions, all_text, all_lengths, data.fps, max_frames, model.transfer_idx, len(text_follower))
-    return out_path
+    visualize_motions(out_path, args, xyz_motions, all_text, all_lengths, data.fps, max_frames, model.transfer_idx, len(text_follower))
+    return out_path, all_motions, xyz_motions
 
 
 def assign_leader_root_rot(args, n_features, transfer_idx, all_motions):
@@ -91,7 +111,9 @@ def assign_leader_root_rot(args, n_features, transfer_idx, all_motions):
 def visualize_motions(out_path: List[str], args, all_motions: List[np.ndarray],
                             all_text: List[List[str]], all_lengths: List[np.ndarray],
                             fps: float, max_frames: int, transfer_idx: dict, n_follower: int):
-    # print(f"saving visualizations to {out_path}...")
+    
+    if not getattr(args, 'render', True):
+        return out_path
     
     # get kinematic chain
     kinematic_chain = paramUtil.t2m_kinematic_chain
@@ -178,7 +200,8 @@ def get_transfer_args(args):
 
 def get_transfer_idx(args):
     # indices of transfer elements (leader, follower, out) within the batch 
-    n_follower = len(args.follower_motion_path) if len(args.follower_motion_path) > 0 else len(args.text_follower)
+    # if neither text nor path are given, it means we are at an evaluation phase, where a single motion is transferred
+    n_follower = len(args.follower_motion_path) if len(args.follower_motion_path) > 0 else len(args.text_follower) if args.text_follower else 1
     n_follower_total = n_follower*args.n_follower_mult
     follower_idx = list(range(1, 1+n_follower_total))
     out_idx = list(range(1+n_follower_total, 1+n_follower_total+n_follower))
@@ -196,15 +219,20 @@ def merge_inverse_args(args, data, inversion_texts, inversion_lengths):
     device=inversion_lengths.device
     running_idx = 0
     n_frames = torch.empty(0, device=device)  # todo: better hold n_frames as an array (or np.array of ints)
-    non_inverted_len = get_max_frames(data, args.motion_length)
-    if args.leader_motion_path:
+    given_motion_kwargs = getattr(args, 'given_motion_kwargs', None)
+    
+    # non_inverted_len will be used only for motions to be generated, in case some motions are inverted and some generated
+    if not given_motion_kwargs:  # given_motion_kwargs exist only during evaluation, in which no generation is done
+        non_inverted_len = get_max_frames(data, motion_length=args.motion_length)
+    
+    if args.leader_motion_path or given_motion_kwargs:
         text_leader =  inversion_texts[0]
         running_idx = 1
         n_frames = torch.cat((n_frames, inversion_lengths[:1]))
     else:
         n_frames = torch.cat((n_frames, torch.tensor([non_inverted_len], device=device)))
         text_leader = args.text_leader
-    if args.follower_motion_path:
+    if args.follower_motion_path or given_motion_kwargs:
         text_follower = inversion_texts[running_idx:]
         n_frames = torch.cat((n_frames, inversion_lengths[running_idx:]))
     else:       
@@ -216,12 +244,12 @@ def merge_inverse_args(args, data, inversion_texts, inversion_lengths):
     n_frames = n_frames.to(int)
     
     inv_idx = []
-    if args.leader_motion_path:
+    if args.leader_motion_path or given_motion_kwargs:
         inv_idx.append(0)
-    if args.follower_motion_path:
+    if args.follower_motion_path or given_motion_kwargs:
         inv_idx.extend(range(1, 1+len(text_follower)*args.n_follower_mult))
 
-    return text_leader, text_follower, n_frames, inv_idx
+    return text_leader, text_follower, n_frames.tolist(), inv_idx
 
 
 if __name__ == "__main__":

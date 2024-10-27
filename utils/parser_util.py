@@ -59,7 +59,7 @@ def add_base_options(parser):
     group.add_argument("--seed", default=10, type=int, help="For fixing random seed.")
     group.add_argument("--batch_size", default=64, type=int, help="Batch size during training.")
 
-    group.add_argument("--train_platform_type", default='NoPlatform', choices=['NoPlatform', 'ClearmlPlatform', 'TensorboardPlatform', 'WandBPlatform', 'WandBSweepPlatform'], type=str,
+    group.add_argument("--ml_platform_type", default='NoPlatform', choices=['NoPlatform', 'ClearmlPlatform', 'TensorboardPlatform', 'WandBPlatform'], type=str,
                     help="Choose platform to log results. NoPlatform means no logging.")
 
 
@@ -216,14 +216,14 @@ def add_vis_feat_options(parser):
 
 
 def add_transfer_options(parser):
-    group = parser.add_argument_group('generate')
-    group.add_argument("--text_leader", default='', type=str,
+    group = parser.add_argument_group('transfer')
+    group.add_argument("--text_leader", default=None, type=str,
                        help="The prompt that describes the leader motion.")
-    group.add_argument("--text_follower", default='', type=str, nargs='+',
+    group.add_argument("--text_follower", default=[], type=str, nargs='*',
                        help="The prompt that describes the follower motion.")
     group.add_argument("--leader_motion_path", default=None, type=str,
                        help="The leader motion to inverse - in npy format.")
-    group.add_argument("--follower_motion_path", default=[], type=str, nargs='+',
+    group.add_argument("--follower_motion_path", default=[], type=str, nargs='*',
                        help="The follower motion to inverse - in npy format.")
     group.add_argument("--n_follower_mult", default=1, type=int,
                        help="Make the follower motion by synthesizing it several times. The parameter tells us how many time to synthesize it.")
@@ -242,30 +242,22 @@ def add_transfer_options(parser):
 
 def add_evaluation_options(parser):
     group = parser.add_argument_group('eval')
-    group.add_argument("--model_path", default=None, type=str, nargs='+', 
+    group.add_argument("--model_path", required=True, type=str,
                        help="Path to model####.pt file to be sampled.")
-    group.add_argument("--external_results_dir", default='',type=str, 
-                       help="Path to dir containing the external results of another model in npy files.")
-    group.add_argument("--eval_name", default='', type=str, help="Optional for wandb. if empty will use the model name instead.")
-    group.add_argument("--eval_mode", default='wo_mm', choices=['gen', 'inversion', 'debug', 'upper_body'], type=str,
-                       help="wo_mm (t2m only) - 20 repetitions without multi-modality metric; "
-                            "mm_short (t2m only) - 5 repetitions with multi-modality metric; "
-                            "debug - short run, less accurate results."
-                            "full (a2m only) - 20 repetitions.")
+    group.add_argument("--eval_name", default='unnamed_experiment', type=str, help="Optional for wandb. if empty will use the model name instead.")
+    group.add_argument("--eval_mode", default='gen', choices=['gen', 'inversion', 'debug'], type=str,
+                       help="gen - generate from text; "
+                            "inversion - invert real dataset motions; "
+                            "debug - short run, less accurate results.")
     group.add_argument("--guidance_param", default=2.5, type=float,
                        help="For classifier-free sampling - specifies the s parameter, as defined in the paper.")
-    
-    group.add_argument("--render", action='store_true', help="If true, will render mp4 for each example.")
-
-    
-    # for motion transfer
+    group.add_argument("--render", action='store_true', help="If true, will render mp4 for the first batch.")
+    group.add_argument("--save", action='store_true', help="If true, will store npy files for the first batch.")
     group.add_argument("--benchmark_path", default=None, type=str,
                     help="Path to csv file defining the Motion Transfer Benchmark.")
     group.add_argument("--samples_limit", default=512, type=int,
                     help="")
     
-
-
 
 def train_args():
     parser = ArgumentParser()
@@ -295,22 +287,12 @@ def transfer_args():
     return parse_and_load_from_model(parser)
 
 
-
 def vis_feat_args():
     parser = ArgumentParser()
     # args specified by the user: (all other will be loaded from the model)
     add_base_options(parser)
     add_sampling_options(parser)
     add_vis_feat_options(parser)
-    return parse_and_load_from_model(parser)
-
-
-def edit_args():
-    parser = ArgumentParser()
-    # args specified by the user: (all other will be loaded from the model)
-    add_base_options(parser)
-    add_sampling_options(parser)
-    add_edit_options(parser)
     return parse_and_load_from_model(parser)
 
 

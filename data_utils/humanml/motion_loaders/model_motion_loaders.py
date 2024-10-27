@@ -1,7 +1,7 @@
 from torch.utils.data import DataLoader, Dataset
 from data_utils.humanml.utils.get_opt import get_opt
 from data_utils.humanml.motion_loaders.comp_v6_model_dataset import CompMDMGeneratedDataset
-from data_utils.humanml.motion_loaders.comp_v6_motion_transfer import CompTransferGeneratedDataset, CompTransferExternalDataset
+from data_utils.humanml.motion_loaders.comp_v6_motion_transfer import CompTransferGeneratedDataset
 from data_utils.humanml.utils.word_vectorizer import WordVectorizer
 import numpy as np
 from torch.utils.data._utils.collate import default_collate
@@ -81,10 +81,7 @@ def get_mdm_loader(model, diffusion, batch_size, ground_truth_loader, mm_num_sam
     # dataset = CompMDMGeneratedDataset(opt, ground_truth_dataset, ground_truth_dataset.w_vectorizer, mm_num_samples, mm_num_repeats)
     DATASET = CompMDMGeneratedDataset
     if is_transfer:
-        if args.external_mode:
-            DATASET = CompTransferExternalDataset
-        else:
-            DATASET = CompTransferGeneratedDataset 
+        DATASET = CompTransferGeneratedDataset 
     dataset = DATASET(model, diffusion, ground_truth_loader, mm_num_samples, mm_num_repeats, max_motion_length, num_samples_limit, args)
 
     mm_dataset = MMGeneratedDataset(opt, dataset, ground_truth_loader.dataset.w_vectorizer)

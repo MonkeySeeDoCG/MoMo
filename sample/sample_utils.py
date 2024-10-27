@@ -4,20 +4,21 @@ import torch
 import numpy as np
 import json
 import shutil
+import copy
 
 from utils import dist_util
-from utils.misc import fixseed, recursive_op1, tensor_to_device
+from utils.misc import fixseed, recursive_op1, tensor_to_device, tensor_to_list
 from utils.model_util import create_model_and_diffusion, load_model_wo_clip
-from data_utils.tensors import collate, get_cond
+from data_utils.tensors import collate
 from data_utils.get_data import get_dataset, dataset_loader_from_data
 from model.cfg_sampler import ClassifierFreeSampleModel
 from data_utils.humanml.scripts.motion_process import recover_from_ric
 from utils.visualize import plot_3d_motion
 
 
-def get_max_frames(dataset, motion_length, n_frames=None):
+def get_max_frames(dataset, motion_length=None, n_frames=None):
     if n_frames is not None:
-        max_frames = int(n_frames.max().item())
+        max_frames = int(max(n_frames) if isinstance(n_frames, list) else n_frames.max().item())
     elif motion_length is not None:
         max_frames = int(round(motion_length * dataset.fps))
     else:
@@ -26,11 +27,14 @@ def get_max_frames(dataset, motion_length, n_frames=None):
 
 
 def get_sample_vars(args: int, data: int, model: int, texts: List[str], get_out_name: Optional[Callable[[int], str]] = None, 
-                    is_using_data: Optional[bool] = False, n_frames = None):
-    if args.output_dir == '':
+                    is_using_data: Optional[bool] = False, n_frames = None, 
+                    max_tensor_frames = None):  # max_tensor_frames is used when we have a given motion (in case of inversion)
+    if not args.output_dir:
         out_name = get_out_name(args)
         out_dir = os.path.dirname(args.model_path)
         out_path = os.path.join(out_dir, out_name)
+    else:
+        out_path = args.output_dir
     args.batch_size = args.num_samples
     if is_using_data:
         data_loader = dataset_loader_from_data(data, args.dataset, args.batch_size, num_workers=0)  # use 0 workers to always obtain the same data samples
@@ -39,12 +43,12 @@ def get_sample_vars(args: int, data: int, model: int, texts: List[str], get_out_
         _, model_kwargs = next(iterator)
         max_frames = model_kwargs['y']['lengths'].max().item()
     else:
-        max_frames = get_max_frames(data, args.motion_length, n_frames)
+        max_frames = max_tensor_frames or get_max_frames(data, args.motion_length, n_frames)
         collate_args = [{'inp': torch.zeros(max_frames), 'tokens': None, 'lengths': max_frames}] * args.num_samples
         collate_args = [dict(arg, text=txt) for arg, txt in zip(collate_args, texts)]
         if n_frames is not None:
             # relevant when using inversion
-            collate_args = [dict(arg, lengths=cur_frames.item()) for arg, cur_frames in zip(collate_args, n_frames)]
+            collate_args = [dict(arg, lengths=cur_frames) for arg, cur_frames in zip(collate_args, n_frames)]
         _, model_kwargs = collate(collate_args)
     shape = (args.num_samples, model.njoints, model.nfeats, max_frames)
     
@@ -61,7 +65,7 @@ def get_niter(model_path):
     return niter
 
 
-def init_main(args, additional_model_args={}):
+def init_main(args, additional_model_args={}, data=None):
     """ This method does initializations that should be done in the main method.
         Most of these initializations are time intensive.
         The internal method can thus be called from multiple mains, e.g., 'generate()' may be called from its own main as well as from 'train'.
@@ -70,8 +74,10 @@ def init_main(args, additional_model_args={}):
     fixseed(args.seed)
     dist_util.setup_dist(args.device)
 
-    print(f'Loading dataset {args.data_dir}')
-    data = get_dataset(name=args.dataset, split='test', hml_mode='text_only', datapath=args.data_dir)
+    if data is None:
+        print(f'Loading dataset {args.data_dir}')
+        data = get_dataset(name=args.dataset, split='test', hml_mode='text_only', datapath=args.data_dir)
+        
     print("Creating model and diffusion...")
     model, diffusion = create_model_and_diffusion(args, data, additional_model_args)
 
@@ -87,6 +93,10 @@ def init_main(args, additional_model_args={}):
 
 
 def save_results(args, out_path, all_motions, all_lengths, all_text):
+    
+    if not getattr(args, 'save', True):
+        return
+     
     assert all_motions.shape[-2] == 3, f"Expected 3 channels for XYZ, but got {all_motions.shape[-2]}"
     
     if os.path.exists(out_path):
@@ -104,17 +114,20 @@ def save_results(args, out_path, all_motions, all_lengths, all_text):
         fw.write('\n'.join([str(l) for l in all_lengths]))
 
     args_path = os.path.join(out_path, 'args.json')
+    
+    args_dict = recursive_op1(vars(args), tensor_to_list)  # relevant when one of the args is the kwargs when running evaluation
     with open(args_path, 'w') as fw:
-        json.dump(vars(args), fw, indent=4, sort_keys=True)
+        json.dump(args_dict, fw, indent=4, sort_keys=True)
 
 
 def sample_motions(args, model, shape, model_kwargs, max_frames, init_noise, sample_func):
     all_motions = []
     all_lengths = []
     all_text = []
+    show_progress = getattr(args, 'show_progress', True)
 
     for rep_i in range(args.num_repetitions):
-        print(f'### Sampling [repetitions #{rep_i}]')
+        if show_progress: print(f'### Sampling [repetitions #{rep_i}]')
 
         sample = sample_func(  
             model,
@@ -124,7 +137,7 @@ def sample_motions(args, model, shape, model_kwargs, max_frames, init_noise, sam
             device=dist_util.dev(),
             skip_timesteps=0,  # 0 is the default value - i.e. don't skip any step
             init_image=init_noise,
-            progress=True,
+            progress=show_progress,
             dump_steps=None,
             noise=None,
             const_noise=False,
@@ -134,7 +147,10 @@ def sample_motions(args, model, shape, model_kwargs, max_frames, init_noise, sam
         else:
             all_text += model_kwargs['y']['text']
         all_motions.append(sample.cpu().numpy())
-        all_lengths.append(np.minimum(model_kwargs['y']['lengths'].cpu().numpy(), max_frames))
+        np_max_frames = copy.deepcopy(max_frames)
+        if isinstance(np_max_frames, torch.Tensor):
+            np_max_frames = np_max_frames.cpu().numpy()
+        all_lengths.append(np.minimum(model_kwargs['y']['lengths'].cpu().numpy(), np_max_frames))
 
     all_motions = np.concatenate(all_motions, axis=0)
     total_num_samples = args.num_samples * args.num_repetitions
@@ -143,7 +159,7 @@ def sample_motions(args, model, shape, model_kwargs, max_frames, init_noise, sam
     all_motions = all_motions[:total_num_samples]  # [bs, njoints, 6, seqlen]
     all_text = all_text[:total_num_samples]
     all_lengths = np.concatenate(all_lengths, axis=0)[:total_num_samples]
-    return all_motions,all_lengths,all_text
+    return all_motions, all_lengths, all_text
 
 
 def get_xyz_rep(data, all_motions):
@@ -162,10 +178,10 @@ def prepare_plot(sample_i, rep_i, args, fps, all_motions, all_text, all_lengths,
     motion = all_motions[rep_i*args.batch_size + sample_i]
     caption = all_text[rep_i*args.batch_size + sample_i]
     motion = motion.transpose(2, 0, 1)
-    if crop :
+    if crop:
         motion = motion[:length]
     else:
-        motion[length:-1] = motion[length-1]  # duplicate the last frame to end of motion, so all motions will be in equal length
+        motion[length:-1] = motion[length-1]  # duplicate the last frame to end of motion, so all motions will be of equal length
     plot = plot_3d_motion(kinematic_chain, motion, dataset=args.dataset, title=caption, fps=fps)
     return plot
 

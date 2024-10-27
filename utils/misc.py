@@ -79,6 +79,16 @@ def tensor_to_device(x, device):
         return x
 
 
+def tensor_to_list(x):
+    if isinstance(x, torch.Tensor):
+        if x.numel() > 5:
+            return 'large tensor'
+        else:
+            return x.detach().cpu().tolist()
+    else:
+        return x
+
+
 def recursive_op2(x, y, op):
     assert type(x) == type(y)
     if isinstance(x, collections.Mapping):

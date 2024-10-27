@@ -1,0 +1,9 @@
+.vscode/
+smpl
+HumanML3D
+save
+wandb
+external_models
+*DS_Store*
+__pycache__/
+t2m_test.npy

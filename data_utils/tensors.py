@@ -57,21 +57,21 @@ def t2m_collate(batch):
     } for b in batch]
     return collate(adapted_batch)
 
-# an adapter to our collate func for the CMA benchmark
+# an adapter to MDM's collate func for the Motion Transfer Benchmark (MTB)
 def t2m_transfer_collate(batch):
-    # batch is build from (structure, appearance) pairs
+    # batch is built from (leader, follower) pairs
     adapted_batch = [{
         # 'inp': torch.tensor(b[4][0].T).float().unsqueeze(1),  # [seqlen, J] -> [J, 1, seqlen]
-        'structure_inp': torch.tensor(b[4][0].T).float().unsqueeze(1),  # [seqlen, J] -> [J, 1, seqlen]
-        'appearance_inp': torch.tensor(b[4][1].T).float().unsqueeze(1),  # [seqlen, J] -> [J, 1, seqlen]
-        'structure_text': b[2][0],
-        'appearance_text': b[2][1],
-        'structure_tokens': b[6][0],
-        'appearance_tokens': b[6][1],
-        'structure_lengths': b[5][0],
-        'appearance_lengths': b[5][1],
-        'structure_idx': b[7][0],
-        'appearance_idx': b[7][1],
+        'leader_inp': torch.tensor(b[4][0].T).float().unsqueeze(1),  # [seqlen, J] -> [J, 1, seqlen]
+        'follower_inp': torch.tensor(b[4][1].T).float().unsqueeze(1),  # [seqlen, J] -> [J, 1, seqlen]
+        'leader_text': b[2][0],
+        'follower_text': b[2][1],
+        'leader_tokens': b[6][0],
+        'follower_tokens': b[6][1],
+        'leader_lengths': b[5][0],
+        'follower_lengths': b[5][1],
+        'leader_idx': b[7][0],
+        'follower_idx': b[7][1],
     } for b in batch]
     return transfer_collate(adapted_batch)
 
@@ -90,8 +90,8 @@ def data_mask_process(notnone_batches, prefix):
 def transfer_collate(batch):
     notnone_batches = [b for b in batch if b is not None]
     cond = {'y': {}}
-    cond['y'].update(data_mask_process(notnone_batches, 'structure'))
-    cond['y'].update(data_mask_process(notnone_batches, 'appearance'))
+    cond['y'].update(data_mask_process(notnone_batches, 'leader'))
+    cond['y'].update(data_mask_process(notnone_batches, 'follower'))
 
     for k in notnone_batches[0].keys():
         if 'text' in k or 'tokens' in k:
@@ -99,13 +99,3 @@ def transfer_collate(batch):
             cond['y'].update({k: textbatch})
 
     return None, cond
-
-def get_cond(motions, texts, lengths=None):
-    """ this method should be called if we want to use the model without traversing the dataset """
-    assert motions or lengths  # one of [motions,max_frames] must not be None
-    if motions is None:
-        max_frames = max(lengths)
-        motions = [torch.zeros(max_frames)] * len(texts)
-    collate_args = [{'inp': motion, 'tokens': None, 'lengths': len, 'texts':txt} for motion, len, txt in zip(motions, lengths, texts)]
-    _, cond = collate(collate_args)
-    return cond

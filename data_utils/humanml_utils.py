@@ -65,6 +65,7 @@ def load_motions(motion_paths: List[str]):
     prompts = []
     
     for motion_path in motion_paths:
+        # todo: use code from dataset.py. This usage must depend on the selected dataset
         
         # get the motion and convert it to what the dataset loader outputs
         motion = np.load(motion_path, allow_pickle=True)  
@@ -84,12 +85,6 @@ def load_motions(motion_paths: List[str]):
         prompts.append(prompt)  
     
     lengths = [motion.shape[-1] for motion in var_len_motions]
-    # max_len = max(lengths)
-    # # Pad each tensor to have the same size in the first dimension
-    # from torch.nn import functional as F
-    # padded_motions = [F.pad(motion, (0, 0, 0, max_len - motion.shape[0])) for motion in var_len_motions]
-    # motions = torch.stack(padded_motions, dim=0)
-    # assert motions.shape[0] == len(prompts)
     return var_len_motions, prompts, lengths
 
 class HumanMlNormalizer(Normalizer):

@@ -376,6 +376,7 @@ def save_multiple_samples(out_path, file_templates,  animations, fps, max_frames
     
     n_rows_in_data = len(animations)
     prefix = kwargs.get('prefix', '')
+    os.makedirs(out_path, exist_ok=True)
     
     for sample_i in range(0, n_rows_in_data, n_rows_in_out_file):
         last_sample_i = min(sample_i+n_rows_in_out_file, n_rows_in_data)

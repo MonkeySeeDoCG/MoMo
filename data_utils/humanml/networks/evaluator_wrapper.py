@@ -134,7 +134,7 @@ class EvaluatorMDMWrapper(object):
             'dim_pose': 263 if dataset_name == 'humanml' else 251,
             'dim_movement_enc_hidden': 512,
             'dim_movement_latent': 512,
-            'checkpoints_dir': '.',
+            'checkpoints_dir': 'external_models',
             'unit_length': 4,
         }
 
