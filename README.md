@@ -123,7 +123,7 @@ python -m eval.eval_transfer --model_path ./save/official_model/model000500000.p
        --eval_mode <mode> --assign_root_rot 
 ```
 Where 
-* `--mode`: <mode> is either `gen` for generation according to benchmark text or `inversion` for using the dataset motions.
+* `--mode`: <mode> is either `gen` for generation according to benchmark text or `inversion` for using the dataset motions. If you are using `inversion`, we recommend adding the argument `--transfer_layers_start 0` in order to attain a better FID score.
 
 Additional useful arguments:
 * `--render`: render output motions (1st batch only)
