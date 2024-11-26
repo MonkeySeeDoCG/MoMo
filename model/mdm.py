@@ -12,14 +12,13 @@ torch.Tensor.__repr__ = lambda self: f"{self.shape}_{normal_repr(self)}"  # for 
 
 
 class MDM(nn.Module):
-    def __init__(self, modeltype, njoints, nfeats, translation, glob, glob_rot,
+    def __init__(self, njoints, nfeats, translation, glob, glob_rot,
                  latent_dim=256, ff_size=1024, num_layers=8, num_heads=4, dropout=0.1,
                  ablation=None, activation="gelu", legacy=False, dataset='amass', clip_dim=512,
                  arch='trans_enc', emb_trans_dec='cls_none_cross_tcond', clip_version=None, **kargs):
         super().__init__()
 
         self.legacy = legacy
-        self.modeltype = modeltype
         self.njoints = njoints
         self.nfeats = nfeats
         self.dataset = dataset
@@ -51,8 +50,6 @@ class MDM(nn.Module):
         self.cond_mode = kargs.get('cond_mode', 'text')
         self.cond_mask_prob = kargs.get('cond_mask_prob', 0.)
         self.emb_before_mask = kargs.get('emb_before_mask', False)
-        self.mask_frames = kargs.get('mask_frames', False)
-        self.frame_averaging = kargs.get('frame_averaging', 'no')
         self.diffusion_steps = kargs.get('diffusion_steps', 1000)
         self.arch = arch
         self.input_process = InputProcess(self.input_feats, self.latent_dim)
@@ -234,13 +231,13 @@ class MDM(nn.Module):
 
         x = self.input_process(x)
 
-        # TODO - move to collate
-        frames_mask = None
-        if self.mask_frames:
-            frames_mask = torch.logical_not(y['mask'][..., :x.shape[0]].squeeze(1).squeeze(1)).to(device=x.device)
-            if self.trans_dec_w_cls() or self.arch == 'trans_enc':
-                step_mask = torch.zeros((bs, 1), dtype=torch.bool, device=x.device)
-                frames_mask = torch.cat([step_mask, frames_mask], dim=1)
+        # create a mask to be used by the transformer
+        # todo: move to collate
+        frames_mask = torch.logical_not(y['mask'][..., :x.shape[0]].squeeze(1).squeeze(1)).to(device=x.device)
+        if self.trans_dec_w_cls() or self.arch == 'trans_enc':
+            # in case there is a concatenated frame for t, add a mask for it too
+            step_mask = torch.zeros((bs, 1), dtype=torch.bool, device=x.device)
+            frames_mask = torch.cat([step_mask, frames_mask], dim=1)
 
         if self.arch == 'trans_enc':
             # adding the timestep embed

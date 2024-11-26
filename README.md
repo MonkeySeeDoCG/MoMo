@@ -140,6 +140,7 @@ Many other arguments can be found in `utils/sample_utils.py`.
 
 ## Visualization of Deep Features
 🔜 Coming soon
+
 ## MDM Compatible Functionalities
 The following MDM functionalities can be used as in the MDM repository.
 ### Motion Synthesis
@@ -148,4 +149,12 @@ Follow [these instructions](https://github.com/GuyTevet/motion-diffusion-model?t
 python -m sample.generate --model_path ./save/official_model/model000500000.pt --num_repetitions 3 --text_prompt "a person is dancing wildly" --motion_length 8
 ```
 ### Model Training
-🔜 Coming soon
+Follow [these instructions](https://github.com/GuyTevet/motion-diffusion-model?tab=readme-ov-file#train-your-own-mdm) under the ``Text to Motion`` detail. The pretrained model given here was produced using the following command:
+```shell
+python -m train.train_mdm --save_dir ./save/<experiment-path> \
+       --diffusion_steps 100 --batch_size 32 --arch trans_dec \
+       --text_encoder_type bert --emb_trans_dec cls_tcond_cross_cond \
+       --layers 12
+```
+Changed arguments (compared to the ones in [MDM]((https://github.com/GuyTevet/motion-diffusion-model?tab=readme-ov-file#train-your-own-mdm))):
+* `--emb_trans_dec`: where and which controls to embed. This argument is of the form `cls_<arg-cls>_cross_<arg-cross>`, where `<arg-cls>` stands for the values to be embedded as an additonal temporal token (used during self attention), and `<arg-cross>` stands for the values to be embedded for cross attention. `<arg-cls>` and `<arg-cross>` can get the values `t`, `tcond`, `cond`, and `none`. `t` stands for the diffusion step, `cond` stands for the text condition, and `none` stands for no control, i.e., no temporal token or no cross-attention. `tcond` stands for summing the embedding of the diffusion step and the textual control. For example, the original MDM paper uses a transformer encoder, which matches the argument cls_tcond_cross_none.

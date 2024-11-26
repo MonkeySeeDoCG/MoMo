@@ -42,15 +42,14 @@ def get_model_args(args, data, additional_args={}):
     njoints = data.n_features  # currently only humanml data is used, where its features contain both joints and feature data
     nfeats = 1
 
-    model_args =  {'modeltype': '', 'njoints': njoints, 'nfeats': nfeats, 
+    model_args =  {'njoints': njoints, 'nfeats': nfeats, 
             'translation': True, 'glob': True, 'glob_rot': True,
             'latent_dim': args.latent_dim, 'ff_size': 1024, 'num_layers': args.layers, 'num_heads': 4,
             'dropout': 0.1, 'activation': "gelu", 
             'cond_mask_prob': args.cond_mask_prob, 'arch': args.arch,
             'emb_trans_dec': args.emb_trans_dec, 'clip_version': clip_version, 'dataset': args.dataset,
             'emb_before_mask': args.emb_before_mask, 'text_encoder_type': args.text_encoder_type,
-            'mask_frames': args.mask_frames, 'root_sep_io': args.root_sep_io, 'frame_averaging': args.frame_averaging,
-            'diffusion_steps': args.diffusion_steps, 'agg_features': getattr(args, 'agg_features', False)}
+            'diffusion_steps': args.diffusion_steps}
     model_args.update(additional_args)
     return model_args
 

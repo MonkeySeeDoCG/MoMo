@@ -145,7 +145,7 @@ class CompV6GeneratedDataset(Dataset):
 
 class CompMDMGeneratedDataset(Dataset):
 
-    def __init__(self, model, diffusion, dataloader, mm_num_samples, mm_num_repeats, max_motion_length, num_samples_limit, scale=1.):
+    def __init__(self, model, diffusion, dataloader, mm_num_samples, mm_num_repeats, max_motion_length, num_samples_limit, args):
         self.dataloader = dataloader
         self.dataset = dataloader.dataset
         assert mm_num_samples < len(dataloader.dataset)
@@ -182,9 +182,9 @@ class CompMDMGeneratedDataset(Dataset):
                 tokens = [t.split('_') for t in model_kwargs['y']['tokens']]
 
                 # add CFG scale to batch
-                if scale != 1.:
+                if args.scale != 1.:
                     model_kwargs['y']['scale'] = torch.ones(motion.shape[0],
-                                                            device=dist_util.dev()) * scale
+                                                            device=dist_util.dev()) * args.scale
 
                 mm_num_now = len(mm_generated_motions) // dataloader.batch_size
                 is_mm = i in mm_idxs

@@ -7,3 +7,4 @@ external_models
 *DS_Store*
 __pycache__/
 t2m_test.npy
+t2m_train.npy

@@ -70,7 +70,8 @@ def visualize_motions(args, out_path, max_frames, all_motions, all_lengths, all_
             # animations[sample_i, rep_i] = plot_3d_motion(kinematic_chain, motion, dataset=args.dataset, title=caption, fps=fps)
             animations[sample_i, rep_i] = prepare_plot(sample_i, rep_i, args, fps, all_motions, all_text, all_lengths, kinematic_chain)
 
-    save_multiple_samples(out_path, {'all': all_file_template}, animations, fps, max_frames, n_rows_in_out_file=args.n_rows_in_out_file)
+    save_multiple_samples(out_path, {'all': all_file_template}, animations, fps, max_frames, 
+                          n_rows_in_out_file=getattr(args, 'n_rows_in_out_file', 3))
 
     abs_path = os.path.abspath(out_path)
     print(f'[Done] Results are at [{abs_path}]')

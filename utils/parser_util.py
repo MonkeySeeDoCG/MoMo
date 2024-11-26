@@ -90,11 +90,6 @@ def add_model_options(parser):
     group.add_argument("--cond_mask_prob", default=.1, type=float,
                        help="The probability of masking the condition during training."
                             " For classifier-free guidance learning.")
-    group.add_argument("--mask_frames", action='store_true', help="If true, will fix Rotem's bug and mask invalid frames.")
-    group.add_argument("--root_sep_io", action='store_true',
-                       help="Root joint get separated input/output process (since the data is different). Relevant only for mat representation.")
-    group.add_argument("--frame_averaging", default='no',
-                       help="Options are `no`, `all` (i.e. into a single vector), or `int` indicating the number of frames avraged into a single vector.")
     group.add_argument("--lambda_rcxyz", default=0.0, type=float, help="Joint positions loss.")
     group.add_argument("--lambda_vel", default=0.0, type=float, help="Joint velocity loss.")
     group.add_argument("--lambda_fc", default=0.0, type=float, help="Foot contact loss.")
@@ -103,8 +98,6 @@ def add_model_options(parser):
                             "Currently tested on HumanAct12 only.")
     group.add_argument("--emb_before_mask", action='store_true',
                        help="If true - for the cond branch - flip between mask and linear blocks (as described in Fig.2).")
-    group.add_argument("--agg_features", action='store_true',
-                       help="Run attention on all joints together (when attending frames), or on all frames together (when attending joints).")
 
 
 def add_data_options(parser):
