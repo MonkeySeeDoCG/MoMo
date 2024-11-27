@@ -3,9 +3,11 @@
 Please visit our [project page](https://monkeyseedocg.github.io/) for more details.
 
 ## News
+📢 **Nov. 27, 2024**: Variation to baseline training code is not available. See the Model Training paragraph.
+
 📢 **Nov. 21, 2024**: TMB benchmark is now available, together with the evaluation code. If you already have an installed environment, run `bash prepare/download_glove.sh; bash prepare/download_t2m_evaluators.sh`. It is recommended to recreate the conda environment as well.
 
-📢 **July 27, 2024**: First release - motion transfer of generated or inverted motions, using a pretrained model. Coming soon: visualization of deep features, evaluation.
+📢 **July 27, 2024**: First release - motion transfer of generated or inverted motions, using a pretrained model. 
 
 ## Preparations
 ### Create Environment
@@ -138,8 +140,10 @@ Many other arguments can be found in `utils/sample_utils.py`.
 * `eval_tranfer_*.log`: This file is created in the same folder as the input model. Its name is combined of the prefix `eval_transfer_` with the iteration number, seed, CFG scale and evaluation mode.
 * All the result files described for the motion transfer framework. The creation of such files takes time, hence you need to explicitely ask for them, using the `--render` or the `--save` arguments.
 
+<!--
 ## Visualization of Deep Features
 🔜 Coming soon
+-->
 
 ## MDM Compatible Functionalities
 The following MDM functionalities can be used as in the MDM repository.
