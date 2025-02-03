@@ -3,7 +3,7 @@
 Please visit our [project page](https://monkeyseedocg.github.io/) for more details.
 
 ## News
-📢 **Nov. 27, 2024**: Variation to baseline training code is not available. See the Model Training paragraph.
+📢 **Nov. 27, 2024**: Variation to baseline training code is now available. See the Model Training paragraph.
 
 📢 **Nov. 21, 2024**: TMB benchmark is now available, together with the evaluation code. If you already have an installed environment, run `bash prepare/download_glove.sh; bash prepare/download_t2m_evaluators.sh`. It is recommended to recreate the conda environment as well.
 
