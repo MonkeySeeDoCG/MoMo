@@ -76,8 +76,10 @@ def transfer(args, data, model, diffusion):
     # handle initial noise
     if is_inv:
         max_inv_frames = inv_motions.shape[-1]
-        init_noise = torch.randn(shape, device=dist_util.dev())   
+        init_noise = torch.zeros(shape, dtype=inv_motions.dtype, device=dist_util.dev())
         init_noise[inv_idx, :, :, :max_inv_frames] = inv_motions  # max_inv_frames might be smaller than shape[-1]
+        non_inv_idx = [i for i in range(shape[0]) if i not in inv_idx]
+        init_noise[non_inv_idx] = torch.randn((len(non_inv_idx),)+shape[1:], device=dist_util.dev())   
         model_kwargs['y']['scale'][inv_idx] = 1.0
         model_kwargs['y']['scale'][model.transfer_idx['out']] = 1.0
     else:
