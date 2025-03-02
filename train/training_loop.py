@@ -139,7 +139,7 @@ class TrainLoop:
             sys.exit(signal.SIGUSR1)
             
     def _load_and_sync_parameters(self):
-        self.resume_checkpoint = self.find_resume_checkpoint() or self.resume_checkpoint
+        self.resume_checkpoint = self.resume_checkpoint or self.find_resume_checkpoint()
 
         if self.resume_checkpoint:
             self.resume_step = parse_resume_step_from_filename(self.resume_checkpoint)
